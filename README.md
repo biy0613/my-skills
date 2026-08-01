@@ -1,13 +1,13 @@
 # my-skills
 
-박인엽 개인 스킬 저장소. **여기가 유일한 원본**이다. 로컬 Claude Code와 Cowork/claude.ai 양쪽이 이 저장소를 바라본다.
+inyup 개인 스킬 저장소. **여기가 유일한 원본**이다. 로컬 Claude Code와 Cowork/claude.ai 양쪽이 이 저장소를 바라본다.
 
 ## 구조
 
 ```
 my-skills/
 ├── .claude-plugin/marketplace.json      # 마켓플레이스 카탈로그
-└── plugins/inyeop-skills/
+└── plugins/inyup-skills/
     ├── .claude-plugin/plugin.json       # 플러그인 매니페스트 (version 올려야 업데이트 배포됨)
     └── skills/                          # ← 로컬 ~/.claude/skills 가 이 폴더를 가리킴 (junction)
         ├── daytrading/
@@ -24,7 +24,7 @@ my-skills/
 접두사 없이 `/daytrading`, `/idm` 형태로 호출.
 
 **Cowork / claude.ai** — 사이드바 `Customize → Plugins → Add from a repository`에 이 저장소의 git URL 입력.
-`inyeop-skills:daytrading` 형태로 뜬다.
+`inyup-skills:daytrading` 형태로 뜬다.
 
 ## 스킬을 새로 만들거나 고칠 때
 
@@ -41,7 +41,7 @@ my-skills/
 git -C ~/my-skills add -A && git -C ~/my-skills commit -m "update" && git -C ~/my-skills push
 ```
 
-Cowork 쪽에 배포하려면 `plugins/inyeop-skills/.claude-plugin/plugin.json`의 `version`을 올린 뒤 푸시한다.
+Cowork 쪽에 배포하려면 `plugins/inyup-skills/.claude-plugin/plugin.json`의 `version`을 올린 뒤 푸시한다.
 버전을 안 올리면 기존 설치자에게 업데이트가 가지 않는다.
 
 ## 스킬 목록

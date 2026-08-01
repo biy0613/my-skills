@@ -5,3 +5,4 @@ Thumbs.db
 
 # 스킬 실행 산출물 (스킬 정의가 아님)
 *-workspace/
+tools/autopush.log

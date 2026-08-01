@@ -8,7 +8,7 @@ allowed-tools: Bash(git -C C:/Users/biy06/my-skills *)
 
 # 스킬 저장소 동기화
 
-`~/.claude/skills`는 `C:/Users/biy06/my-skills/plugins/inyeop-skills/skills`를 가리키는 junction이다.
+`~/.claude/skills`는 `C:/Users/biy06/my-skills/plugins/inyup-skills/skills`를 가리키는 junction이다.
 즉 로컬에서 스킬을 만들거나 고치면 파일은 이미 저장소 안에 있고, **커밋·푸시만 남아 있다.**
 
 ## 실행
@@ -25,7 +25,7 @@ git -C C:/Users/biy06/my-skills status --short
 
 ### 2. 새 스킬이 추가됐다면 version 올리기
 
-`plugins/inyeop-skills/.claude-plugin/plugin.json`의 `version`을 올린다.
+`plugins/inyup-skills/.claude-plugin/plugin.json`의 `version`을 올린다.
 **이걸 빼먹으면 Cowork 쪽에 업데이트가 가지 않는다** — 로컬에서만 잘 되고 Cowork에선 옛날 스킬이 도는 상태가 되는데, 증상이 조용해서 알아채기 어렵다.
 
 - 스킬 내용만 고침 → patch (1.0.0 → 1.0.1)
