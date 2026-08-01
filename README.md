@@ -26,23 +26,29 @@ my-skills/
 **Cowork / claude.ai** — 사이드바 `Customize → Plugins → Add from a repository`에 이 저장소의 git URL 입력.
 `inyup-skills:daytrading` 형태로 뜬다.
 
-## 스킬을 새로 만들거나 고칠 때
+## 스킬을 새로 만들거나 고칠 때 — 아무것도 안 해도 된다
 
-`~/.claude/skills/`에서 평소대로 작업하면 파일은 자동으로 이 저장소에 들어온다 (junction).
-반영은 커밋/푸시가 되어야 하므로:
+`~/.claude/skills/`에서 평소대로 작업하면 파일은 자동으로 이 저장소에 들어오고(junction),
+**세션이 끝날 때 `tools/autopush.ps1`이 커밋·푸시까지 자동으로 한다.**
+스킬 파일이 바뀐 경우 `plugin.json`의 patch 버전도 알아서 올린다.
+
+- 훅 설정: `~/.claude/settings.json`의 `hooks.SessionEnd`
+- 실행 기록: `tools/autopush.log` (푸시 실패 시 여기에 남는다)
+
+세션이 끝나기 전에 즉시 올리고 싶으면:
 
 ```
 /skills-sync
 ```
 
-또는 직접:
+푸시가 실패하면 커밋은 로컬에 남아 있으므로, 다음 세션 종료 때 함께 올라간다.
 
-```bash
-git -C ~/my-skills add -A && git -C ~/my-skills commit -m "update" && git -C ~/my-skills push
-```
+### autopush.ps1을 고칠 때 주의
 
-Cowork 쪽에 배포하려면 `plugins/inyup-skills/.claude-plugin/plugin.json`의 `version`을 올린 뒤 푸시한다.
-버전을 안 올리면 기존 설치자에게 업데이트가 가지 않는다.
+파일이 **ASCII 전용**인 데는 이유가 있다. Windows PowerShell 5.1은 BOM 없는 파일을
+시스템 코드페이지(CP949)로 읽기 때문에, 주석에 한글을 넣으면 스크립트가 실행되기도 전에
+파싱이 깨진다. 같은 이유로 `plugin.json`을 읽고 쓸 때 UTF-8을 명시한다 —
+PowerShell에 맡기면 description의 한글이 조용히 깨진 채 커밋된다.
 
 ## 스킬 목록
 
