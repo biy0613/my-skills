@@ -3,13 +3,17 @@
 #
 # ASCII-only on purpose: Windows PowerShell 5.1 reads unmarked files as the system
 # codepage, so non-ASCII characters here would break parsing before anything runs.
+# For the same reason every file read/write below names UTF-8 explicitly -- letting
+# PowerShell guess silently corrupts the Korean text in plugin.json.
 
 $ErrorActionPreference = "Continue"
 $repo = "C:\Users\biy06\my-skills"
 $log  = Join-Path $repo "tools\autopush.log"
+$utf8 = New-Object System.Text.UTF8Encoding($false)
 
 function Write-Log($msg) {
-    "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $msg" | Add-Content -Path $log -Encoding utf8
+    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $msg`r`n"
+    [System.IO.File]::AppendAllText($log, $line, $utf8)
 }
 
 try {
@@ -22,11 +26,11 @@ try {
     # current but Cowork keeps serving the old skills, and the failure is silent.
     if ($changes -match "plugins/inyup-skills/skills/") {
         $pj = Join-Path $repo "plugins\inyup-skills\.claude-plugin\plugin.json"
-        $raw = Get-Content $pj -Raw
+        $raw = [System.IO.File]::ReadAllText($pj, $utf8)
         if ($raw -match '"version"\s*:\s*"(\d+)\.(\d+)\.(\d+)"') {
             $new = "{0}.{1}.{2}" -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
-            $raw = $raw -replace '"version"\s*:\s*"\d+\.\d+\.\d+"', ('"version": "' + $new + '"')
-            [System.IO.File]::WriteAllText($pj, $raw)
+            $out = $raw -replace '"version"\s*:\s*"\d+\.\d+\.\d+"', ('"version": "' + $new + '"')
+            [System.IO.File]::WriteAllText($pj, $out, $utf8)
             Write-Log "version bumped to $new"
         }
     }
