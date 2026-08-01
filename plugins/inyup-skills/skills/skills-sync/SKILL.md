@@ -51,3 +51,5 @@ git -C C:/Users/biy06/my-skills push -u origin main
 ## 완료 후
 
 Cowork·claude.ai 쪽은 세션 시작 시점에 동기화된다. 이미 열려 있는 Cowork 세션에는 즉시 반영되지 않으니, 바로 확인하려면 새 세션을 열어야 한다.
+
+<!-- autopush 동작 확인용 임시 줄 -->
