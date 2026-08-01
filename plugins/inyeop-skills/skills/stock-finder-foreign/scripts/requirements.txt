@@ -1,0 +1,10 @@
+# pykrx는 KRX 로그인 차단으로 이 스크리너가 직접 쓰지 않지만,
+# 사용자가 KRX_ID/KRX_PW를 갖고 있으면 원본 순매수 금액을 쓸 수 있어 함께 설치한다.
+# pykrx가 pandas 3.x와 호환되지 않아 pandas를 2.x로 내리는 것은 정상 동작이다.
+finance-datareader>=0.9.90
+pandas>=2.0,<3.0
+numpy
+requests
+beautifulsoup4
+lxml
+pykrx
