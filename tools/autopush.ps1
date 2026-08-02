@@ -45,6 +45,22 @@ try {
     } else {
         Write-Log "pushed OK"
     }
+
+    # Rebuild the uploadable .skill bundles. Cowork cannot sync a private repo unless the
+    # Claude GitHub App is installed on it, so hand-uploading these is the working
+    # fallback -- and a stale bundle silently uploads an old version of the skill.
+    $dist = Join-Path $repo "dist"
+    if (-not (Test-Path $dist)) { New-Item -ItemType Directory -Path $dist -Force | Out-Null }
+    $skillRoot = Join-Path $repo "plugins\inyup-skills\skills"
+    foreach ($d in Get-ChildItem $skillRoot -Directory) {
+        $zip = Join-Path $dist ($d.Name + ".zip")
+        $out = Join-Path $dist ($d.Name + ".skill")
+        if (Test-Path $zip) { Remove-Item $zip -Force }
+        if (Test-Path $out) { Remove-Item $out -Force }
+        Compress-Archive -Path $d.FullName -DestinationPath $zip -Force
+        Rename-Item $zip ($d.Name + ".skill")
+    }
+    Write-Log "rebuilt dist bundles"
 }
 catch {
     Write-Log "EXCEPTION: $_"
