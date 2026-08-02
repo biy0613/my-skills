@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import portfolio as P  # noqa: E402
 
 REVIEW_FIELDS = ["점검일", "점검 요약", "가정1", "가정2", "가정3",
-                 "논지 드리프트", "리셋 질문", "손절선 갱신", "현재 비중", "결론"]
+                 "근거 변경 유무", "현가 매수 의중", "손절선 갱신", "현재 비중", "결론"]
 HOLD_FIELDS = ["날짜", "보유 이유", "켜진 B 트리거", "구분", "재점검 기한"]
 FOLLOW_FIELDS = ["시점", "날짜", "주가", "매도가 대비", "판단 평가"] + P.POST_FIELDS
 
@@ -54,8 +54,19 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", help="payload JSON 파일 경로 (생략 시 stdin)")
     ap.add_argument("--fields", choices=list(FIELDS), help="단계별 입력 필드 목록만 출력")
+    ap.add_argument("--gates", action="store_true",
+                    help="게이트·트리거·매도유형 문항 전문 출력 (사용자에게 그대로 읽어줄 것)")
     ap.add_argument("--workbook", default=P.DEFAULT_WB_PATH)
     args = ap.parse_args()
+
+    if args.gates:
+        print(json.dumps({
+            "진입 하드게이트 6": P.ENTRY_GATES,
+            "회수 A 보류게이트 7": P.EXIT_GATES_A,
+            "회수 B 강제트리거 6": P.EXIT_TRIGGERS_B,
+            "매도 유형 5": {k: v for k, v in P.EXIT_TYPES},
+        }, ensure_ascii=False, indent=2))
+        return 0
 
     if args.fields:
         print(json.dumps({"단계": args.fields,

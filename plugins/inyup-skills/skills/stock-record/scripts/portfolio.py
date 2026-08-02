@@ -20,6 +20,7 @@ from datetime import date, datetime
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.chart import LineChart, Reference
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -113,21 +114,15 @@ ENTRY_FIELDS = [
     "규칙 이탈 여부",
     "핵심 논지 (한 문장)",
     "가정 1",
-    "가정 1 — 확인 시점·방법",
     "가정 2",
-    "가정 2 — 확인 시점·방법",
     "가정 3",
-    "가정 3 — 확인 시점·방법",
     "반대 논지 (2개 이상)",
-    "가장 반박하기 어려운 것",
+    "앞으로의 기대감",
     "컨센서스와 내 견해 차이",
     "지금 가격이 이미 반영한 것",
     "펀더멘탈",
     "법률·규제 리스크",
     "수급",
-    "카탈리스트",
-    "시간 지평",
-    "정보원",
     "매수 시 감정 상태",
     "목표 비중 / 최대 허용 손실",
     "분할·추가매수 규칙",
@@ -140,7 +135,7 @@ ENTRY_FIELDS = [
 
 REVIEW_COLS = [
     ("점검일", 12), ("점검 요약 — 무엇이 바뀌었나", 70), ("가정1", 10),
-    ("가정2", 10), ("가정3", 10), ("논지 드리프트", 12), ("리셋 질문", 11),
+    ("가정2", 10), ("가정3", 10), ("근거 변경 유무", 13), ("현가 매수 의중", 13),
     ("손절선 갱신", 12), ("현재 비중", 10), ("결론", 12),
 ]
 
@@ -155,6 +150,7 @@ EXIT_FIELDS = [
     "B 강제트리거 O 개수",
     "매도 유형",
     "유형 근거 — 요건이 성립하는가",
+    "24h 쿨다운 했나",
     "계획대로였나",
     "이탈 내용",
 ]
@@ -168,7 +164,7 @@ FOLLOW_COLS = [
     ("시점", 10), ("내 매도 판단은 옳았나", 70), ("날짜", 12),
     ("주가", 12), ("매도가 대비", 12),
 ]
-FOLLOW_ROWS = ["D+90", "D+180", "D+365"]
+FOLLOW_ROWS = ["1달 후", "2달 후", "반년 후"]
 
 POST_FIELDS = [
     "과정/결과 4분면",
@@ -189,6 +185,82 @@ DV_HOLDKIND = '"규칙 이탈,사전 정의된 예외"'
 DV_QUAD = '"과정O·결과O,과정O·결과X,과정X·결과O(경고),과정X·결과X"'
 
 STAGES = ("진입", "보유점검", "회수", "홀드", "사후추적")
+
+# --------------------------------------------------------------------------
+# 게이트 문항 — 셀 메모로 붙고, 스킬이 사용자에게 물을 때도 그대로 읽어준다
+# --------------------------------------------------------------------------
+ENTRY_GATES = [
+    "실적 발표를 1회 이상 통과하며 관찰했는가 (최소 1개월)",
+    "이 종목을 한 문장으로 설명할 수 있는가",
+    "반대 논지를 2개 이상 적을 수 있는가",
+    "손절 조건을 가격 + 사실 양쪽으로 숫자화했는가",
+    "포지션 크기가 사전 규칙 내인가 (비중 상한 30% + 최대 허용 손실 30%)",
+    "사는 이유가 급등·뉴스·손실 복구가 아닌가 (24시간 쿨다운)",
+]
+
+EXIT_GATES_A = [
+    "매도 유형을 하나로 특정했는가",
+    "진입 시 적어둔 손절/익절 조건 중 실제로 발동한 항목이 있는가",
+    "매도 이유가 주가가 아니라 사실로 설명되는가",
+    "이 결정을 어제도 똑같이 했을 것인가 (24h 쿨다운)",
+    "오늘 안 갖고 있다면 이 가격에 사지 않을 것인가",
+    "매도 후 2배 더 올라도 판단이 옳았다고 말할 근거가 있는가",
+    "지금 감정이 공포·지루함·본전 심리가 아닌가",
+]
+
+EXIT_TRIGGERS_B = [
+    "진입 시 적은 사실 기준(thesis break) 중 하나 이상 발생",
+    "가정 3개 중 2개 이상 반증",
+    '가격 손절선 이탈 + "손절하지 않는 경우"에 해당하지 않음',
+    "경영진 신뢰 훼손 (회계 이슈, 공시 번복, 내부자 대량 매도, 갑작스러운 CFO 사임)",
+    "논지 드리프트 — 새 이유로는 진입 게이트를 통과 못 함",
+    "비중 상한 초과 상태로 3개월 이상 방치",
+]
+
+EXIT_TYPES = [
+    ("①논지훼손", "사실 기준·가정이 실제로 반증됨. 가격 하락은 요건이 아님"),
+    ("②목표달성", "익절 사실 기준 도달 또는 목표가 도달 + 남은 논지 없음"),
+    ("③교체", "새 후보가 진입 게이트 통과 + 세금·비용 차감 후에도 우위"),
+    ("④리스크관리", "논지는 유효하나 비중 상한 초과·유동성 문제. 부분 매도가 원칙"),
+    ("⑤현금필요", "투자 판단과 무관한 실생활 자금 수요"),
+]
+
+
+def _numbered(items) -> str:
+    return "\n".join(f"{i}. {t}" for i, t in enumerate(items, 1))
+
+
+CELL_NOTES = {
+    "하드게이트 통과 (O/6)": (
+        "진입 하드게이트 6 — 하나라도 X면 매수 보류\n\n"
+        + _numbered(ENTRY_GATES)
+        + "\n\nX가 나오면 X라고 적는다. 그래도 진행하면 '규칙 이탈 여부'에 사유를 적는다."
+    ),
+    "A 보류게이트 X 개수": (
+        "A 보류게이트 7 — 하나라도 X면 매도 보류\n\n"
+        + _numbered(EXIT_GATES_A)
+        + "\n\n6번은 익절 전용 장치다. 손절은 규칙으로 잡히지만\n"
+          "너무 빨리 파는 익절은 규칙에 안 걸린다(처분효과)."
+    ),
+    "B 강제트리거 O 개수": (
+        "B 강제트리거 6 — 하나라도 O면 매도가 원칙\n\n"
+        + _numbered(EXIT_TRIGGERS_B)
+        + "\n\nB가 켜졌는데 A가 X면 B가 우선한다.\n"
+          "A는 충동 매도를 막는 장치지 강제 매도를 무르는 장치가 아니다.\n"
+          "B가 켜졌는데 팔지 않았다면 반드시 [③-E 홀드 기록]을 남긴다."
+    ),
+    "매도 유형": (
+        "매도 유형 5 — 하나만 고른다\n\n"
+        + "\n".join(f"{k} : {v}" for k, v in EXIT_TYPES)
+        + "\n\n두 개 이상 해당한다고 느껴지면 진짜 이유를 다른 이름으로\n"
+          "부르고 있다는 신호다.\n"
+          "흔한 오분류 — 손실 회피를 ③으로 포장 / 전량 매도해놓고 ④라고 적음"
+    ),
+    "24h 쿨다운 했나": (
+        "매도 결정을 하루 재우고 실행했는가.\n"
+        "급락·급등 당일 판단을 차단하는 장치다 (A 보류게이트 4번)."
+    ),
+}
 
 
 # --------------------------------------------------------------------------
@@ -231,6 +303,9 @@ def _label_value_block(ws, start_row: int, fields, note: str | None = None) -> i
         lab.fill = FILL_BAND
         lab.alignment = WRAP_TOP
         lab.border = BOX
+        if f in CELL_NOTES:
+            lab.comment = Comment(CELL_NOTES[f], "체크포인트", width=420, height=230)
+            lab.font = Font(name="맑은 고딕", size=9, bold=True, color=ACCENT)
         val = ws.cell(row=r, column=3)
         val.font = F_BODY
         val.alignment = WRAP_TOP
@@ -307,9 +382,9 @@ def build_settings(wb) -> None:
         ("기준 통화", "KRW", "모든 평가액은 원화로 환산해 집계한다"),
         ("USD/KRW 환율", 1380, "stock-price 실행 시 함께 갱신한다"),
         ("환율 기준일", None, ""),
-        ("단일 종목 비중 상한", 0.20, "진입 게이트 5번 판정 기준"),
-        ("단일 팩터 비중 상한", 0.40, "분기 포트폴리오 점검용"),
-        ("최대 허용 손실 (1종목, 원)", None, "진입 게이트 5번 판정 기준"),
+        ("단일 종목 비중 상한", 0.30, "진입 게이트 5번 판정 기준"),
+        ("단일 팩터 비중 상한", 0.50, "분기 포트폴리오 점검용"),
+        ("최대 허용 손실 (1종목)", 0.30, "종목당 −30%. 진입 게이트 5번 판정 기준 (고정값)"),
     ]
     r = 4
     for lab, val, memo in rows:
@@ -325,9 +400,8 @@ def build_settings(wb) -> None:
 
     ws["C5"].number_format = FMT_KRW
     ws["C6"].number_format = FMT_DATE
-    ws["C7"].number_format = FMT_PCT0
-    ws["C8"].number_format = FMT_PCT0
-    ws["C9"].number_format = FMT_KRW
+    for cell in ("C7", "C8", "C9"):
+        ws[cell].number_format = FMT_PCT0
 
     wb.defined_names.add(_defined_name("환율", "설정", "$C$5"))
     wb.defined_names.add(_defined_name("비중상한", "설정", "$C$7"))
@@ -636,12 +710,17 @@ def build_stock_sheet(wb, name: str):
     r += 1
     exit_start = r
     r = _label_value_block(ws, r, EXIT_FIELDS)
-    ws[f"C{exit_start}"].number_format = FMT_DATE
-    ws[f"C{exit_start+1}"].number_format = FMT_PRC
-    ws[f"C{exit_start+3}"].number_format = FMT_PNL
-    ws[f"C{exit_start+4}"].number_format = FMT_PCT
-    _add_dv(ws, DV_EXITTYPE, f"C{exit_start+8}")
-    _add_dv(ws, DV_PLAN, f"C{exit_start+10}")
+
+    def erow(label: str) -> int:
+        return exit_start + EXIT_FIELDS.index(label)
+
+    ws[f"C{erow('매도일')}"].number_format = FMT_DATE
+    ws[f"C{erow('매도 단가')}"].number_format = FMT_PRC
+    ws[f"C{erow('실현 손익(원)')}"].number_format = FMT_PNL
+    ws[f"C{erow('실현 수익률')}"].number_format = FMT_PCT
+    _add_dv(ws, DV_EXITTYPE, f"C{erow('매도 유형')}")
+    _add_dv(ws, DV_YN, f"C{erow('24h 쿨다운 했나')}")
+    _add_dv(ws, DV_PLAN, f"C{erow('계획대로였나')}")
 
     r += 1
     _anchor(ws, r, "#HOLD")
@@ -822,7 +901,7 @@ def append_review(ws, data: dict) -> int:
     row = first_empty_row(ws, hdr)
     _ensure_row_style(ws, row, REVIEW_COLS)
     order = ["점검일", "점검 요약", "가정1", "가정2", "가정3",
-             "논지 드리프트", "리셋 질문", "손절선 갱신", "현재 비중", "결론"]
+             "근거 변경 유무", "현가 매수 의중", "손절선 갱신", "현재 비중", "결론"]
     for j, key in enumerate(order):
         v = data.get(key)
         if key == "점검일":
