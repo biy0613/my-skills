@@ -56,8 +56,30 @@ def main() -> int:
     ap.add_argument("--fields", choices=list(FIELDS), help="단계별 입력 필드 목록만 출력")
     ap.add_argument("--gates", action="store_true",
                     help="게이트·트리거·매도유형 문항 전문 출력 (사용자에게 그대로 읽어줄 것)")
+    ap.add_argument("--template", action="store_true",
+                    help="해당 종목·단계에서 채워야 할 엑셀 자리를 폼으로 출력")
+    ap.add_argument("--questions", action="store_true",
+                    help="사용자가 바로 답할 수 있는 질문 목록으로 출력 (게이트 판정 이후 단계)")
+    ap.add_argument("--stock", help="--template 용 종목명")
+    ap.add_argument("--stage", choices=list(FIELDS), help="--template 용 단계")
     ap.add_argument("--workbook", default=P.DEFAULT_WB_PATH)
     args = ap.parse_args()
+
+    if args.template or args.questions:
+        mode = "questions" if args.questions else "template"
+        if not args.stock or not args.stage:
+            print(f"오류: --{mode} 에는 --stock 과 --stage 가 필요하다.", file=sys.stderr)
+            return 2
+        wb = P.open_wb(args.workbook)
+        sname = P._safe_sheet_name(args.stock)
+        if sname not in wb.sheetnames:
+            # 시트가 없으면 만들어 두고(저장은 하지 않음) 동일한 폼을 낸다
+            ws = P.build_stock_sheet(wb, args.stock)
+        else:
+            ws = wb[sname]
+        print(P.render_questions(ws, args.stage, args.stock) if args.questions
+              else P.render_template(ws, args.stage, args.stock))
+        return 0
 
     if args.gates:
         print(json.dumps({
@@ -142,15 +164,17 @@ def main() -> int:
 
     wb.save(args.workbook)
 
-    missing = [f for f in FIELDS[stage] if f not in done]
+    # 빈 항목은 이번 payload가 아니라 **시트의 실제 상태**로 판정한다.
+    # payload 기준으로 세면 부분 갱신 때 이미 채워진 칸까지 비었다고 보고하게 된다.
+    missing = [x["필드"] for x in P.block_status(ws, stage) if x["값"] in (None, "")]
     print(json.dumps({
         "결과": "기록 완료",
         "종목": name,
         "단계": stage,
         "시트": ws.title,
         "위치": where,
-        "기록된_항목수": len(done),
-        "빈_항목": missing,
+        "이번에_쓴_항목수": len(done),
+        "시트에_남은_빈_항목": missing,
         "파일": args.workbook,
     }, ensure_ascii=False, indent=2))
     return 0
