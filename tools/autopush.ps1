@@ -60,6 +60,15 @@ try {
         Compress-Archive -Path $d.FullName -DestinationPath $zip -Force
         Rename-Item $zip ($d.Name + ".skill")
     }
+    # Whole-plugin bundle: one upload installs all skills at once on the Cowork
+    # Plugins page. Kept in sync for the same reason as the .skill bundles above.
+    $pzip = Join-Path $dist "inyup-skills.zip"
+    $pout = Join-Path $dist "inyup-skills.plugin"
+    if (Test-Path $pzip) { Remove-Item $pzip -Force }
+    if (Test-Path $pout) { Remove-Item $pout -Force }
+    Compress-Archive -Path (Join-Path $repo "plugins\inyup-skills") -DestinationPath $pzip -Force
+    Rename-Item $pzip "inyup-skills.plugin"
+
     Write-Log "rebuilt dist bundles"
 }
 catch {
