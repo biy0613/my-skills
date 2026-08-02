@@ -58,6 +58,7 @@ FILL_SECTION = PatternFill("solid", fgColor=INK)
 FILL_BAND = PatternFill("solid", fgColor=BAND)
 FILL_CREAM = PatternFill("solid", fgColor=CREAM)
 FILL_INPUT = PatternFill("solid", fgColor="FFFFFF")
+FILL_ACCENT = PatternFill("solid", fgColor="FDE8E2")   # 누적 손익 강조
 
 THIN = Side(style="thin", color=LINE)
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -100,7 +101,7 @@ PRICE_FIRST_ROW = 3
 
 SNAP_COLS = [
     ("기록일", 12), ("주식평가액", 15), ("보유현금", 14), ("총자산", 15),
-    ("입출금(당회)", 13), ("순입금누계", 15), ("평가손익", 15),
+    ("입출금(당회)", 13), ("순입금누계", 15), ("누적 손익", 15),
     ("누적수익률", 12), ("직전대비", 11), ("메모", 40),
 ]
 SNAP_HEAD_ROW = 11
@@ -466,8 +467,8 @@ def _write_master_formulas(ws, r: int) -> None:
                    f'IF($F{r}="USD",$G{r}*$J{r}*{fx},$G{r}*$J{r}))')
     ws[f"M{r}"] = f'=IF(OR($L{r}="",$I{r}=""),"",$L{r}-$I{r})'
     ws[f"N{r}"] = f'=IFERROR($M{r}/$I{r},"")'
-    ws[f"O{r}"] = (f'=IFERROR($L{r}/SUMIF($B$3:$B${MASTER_FIRST_ROW+39},"보유",'
-                   f'$L$3:$L${MASTER_FIRST_ROW+39}),"")')
+    # 비중 분모는 총자산(주식평가액 + 보유현금). 현금을 빼면 비중이 과대평가된다.
+    ws[f"O{r}"] = f'=IFERROR($L{r}/대시보드!$E$5,"")'
     ws[f"S{r}"] = f'=IFERROR($Q{r}/$J{r}-1,"")'
     ws[f"V{r}"] = f'=IF($C{r}="","",$C{r})'
 
@@ -522,6 +523,89 @@ def _write_price_row_format(ws, r: int) -> None:
     ws.row_dimensions[r].height = 18
 
 
+def dashboard_kpis():
+    """대시보드 KPI — (자산 밴드, 손익 밴드) 두 줄로 돌려준다.
+
+    자산 밴드 (라벨 4행 / 값 5행): B주식평가액 C보유현금 D현금비중 E총자산
+                                  F보유종목수 G최근기록일
+    손익 밴드 (라벨 6행 / 값 7행): B순입금누계 C누적손익 D누적수익률
+                                  E실현손익 F투자원금 G보유종목평가손익 H보유종목수익률
+
+    보유종목 시트의 '비중' 이 **E5(총자산)** 를 분모로 쓴다. 순서를 바꾸면 거기도 고칠 것.
+
+    두 손익을 굳이 나눠 두는 이유: '누적 손익'은 계좌 전체(입금액 대비) 성적이고
+    '보유종목 평가손익'은 지금 들고 있는 포지션의 성적이다. 실현 손절이 있으면 둘이
+    크게 벌어지는데, 섞어 보면 계좌가 깨진 걸 포지션 수익률로 가려 버리게 된다.
+    """
+    mlast = MASTER_FIRST_ROW + 39
+    lookup_last = lambda col: (f'=IFERROR(LOOKUP(2,1/($B${SNAP_FIRST_ROW}:$B${MAXR}<>""),'
+                               f'${col}${SNAP_FIRST_ROW}:${col}${MAXR}),0)')
+    asset = [
+        ("주식 평가액", f'=SUMIF(보유종목!$B$3:$B${mlast},"보유",보유종목!$L$3:$L${mlast})', FMT_KRW),
+        ("보유 현금", lookup_last("D"), FMT_KRW),
+        ("현금 비중", '=IFERROR($C$5/$E$5,"")', FMT_PCT0),
+        ("총자산", "=$B$5+$C$5", FMT_KRW),
+        ("보유 종목 수", f'=COUNTIF(보유종목!$B$3:$B${mlast},"보유")', "0"),
+        ("최근 기록일", lookup_last("B").replace(",0)", ',"")'), FMT_DATE),
+    ]
+    pnl = [
+        ("순입금 누계", lookup_last("G"), FMT_KRW),
+        ("누적 손익", "=$E$5-$B$7", FMT_PNL),
+        ("누적 수익률", '=IFERROR($C$7/$B$7,"")', FMT_PCT),
+        ("실현 손익", "=$C$7-$G$7", FMT_PNL),
+        ("투자원금(보유분)", f'=SUMIF(보유종목!$B$3:$B${mlast},"보유",보유종목!$I$3:$I${mlast})', FMT_KRW),
+        ("보유종목 평가손익", "=$B$5-$F$7", FMT_PNL),
+        ("보유종목 수익률", '=IFERROR($G$7/$F$7,"")', FMT_PCT),
+    ]
+    return asset, pnl
+
+
+def write_kpi_block(ws) -> None:
+    """KPI 두 밴드와 스냅샷 제목을 (재)작성한다. 전부 수식이라 덮어써도 안전하다."""
+    asset, pnl = dashboard_kpis()
+
+    def band(items, label_row, value_row, highlight=None):
+        for i, (label, formula, fmt) in enumerate(items):
+            col = 2 + i
+            lc = ws.cell(row=label_row, column=col, value=label)
+            lc.font = F_KPI_LABEL
+            lc.fill = FILL_CREAM
+            lc.alignment = Alignment(horizontal="center", vertical="center")
+            lc.border = BOX
+            vc = ws.cell(row=value_row, column=col, value=formula)
+            vc.font = F_KPI_VALUE
+            vc.fill = FILL_ACCENT if label == highlight else FILL_CREAM
+            vc.number_format = fmt
+            vc.alignment = Alignment(horizontal="center", vertical="center")
+            vc.border = BOX
+            ws.column_dimensions[get_column_letter(col)].width = 17
+        ws.row_dimensions[label_row].height = 18
+        ws.row_dimensions[value_row].height = 30
+        # 이전 레이아웃이 더 길었을 수 있다. 밴드 오른쪽 잔재를 지운다.
+        for col in range(2 + len(items), 16):
+            for row in (label_row, value_row):
+                c = ws.cell(row=row, column=col)
+                c.value = None
+                c.fill = PatternFill(fill_type=None)
+                c.border = Border()
+
+    band(asset, 4, 5)
+    band(pnl, 6, 7, highlight="누적 손익")
+
+    # 날짜는 13pt 굵게면 폭이 모자라 ####### 이 된다
+    ws.cell(row=5, column=1 + len(asset)).font = Font(
+        name="맑은 고딕", size=11, bold=True, color=INK)
+    ws.cell(row=4, column=1, value="자산").font = F_MUTED
+    ws.cell(row=6, column=1, value="손익").font = F_MUTED
+
+    ws.cell(row=8, column=2, value=None)
+    ws.cell(row=9, column=2, value="■ 평가액 스냅샷").font = Font(
+        name="맑은 고딕", size=12, bold=True, color=INK)
+    ws.cell(row=10, column=2, value=(
+        "주 2회 stock-price 스킬로 append. 주식평가액은 [시세기록]의 같은 날짜 합계로 자동 계산된다. "
+        "보유현금과 입출금만 직접 넣으면 된다.")).font = F_MUTED
+
+
 def build_dashboard(wb) -> None:
     ws = wb.create_sheet("대시보드", 0)
     ws.sheet_properties.tabColor = ACCENT
@@ -534,44 +618,7 @@ def build_dashboard(wb) -> None:
     ws["B3"].font = F_MUTED
     ws.row_dimensions[2].height = 30
 
-    mlast = MASTER_FIRST_ROW + 39
-    kpis = [
-        ("주식 평가액", f'=SUMIF(보유종목!$B$3:$B${mlast},"보유",보유종목!$L$3:$L${mlast})', FMT_KRW),
-        ("보유 현금", f'=IFERROR(LOOKUP(2,1/($B${SNAP_FIRST_ROW}:$B${MAXR}<>""),'
-                     f'$D${SNAP_FIRST_ROW}:$D${MAXR}),0)', FMT_KRW),
-        ("총자산", "=B5+C5", FMT_KRW),
-        ("투자원금", f'=SUMIF(보유종목!$B$3:$B${mlast},"보유",보유종목!$I$3:$I${mlast})', FMT_KRW),
-        ("평가손익", "=B5-E5", FMT_PNL),
-        ("수익률", '=IFERROR(F5/E5,"")', FMT_PCT),
-        ("보유 종목 수", f'=COUNTIF(보유종목!$B$3:$B${mlast},"보유")', "0"),
-        ("최근 기록일", f'=IFERROR(LOOKUP(2,1/($B${SNAP_FIRST_ROW}:$B${MAXR}<>""),'
-                       f'$B${SNAP_FIRST_ROW}:$B${MAXR}),"")', FMT_DATE),
-    ]
-    for i, (label, formula, fmt) in enumerate(kpis):
-        col = 2 + i
-        lc = ws.cell(row=4, column=col, value=label)
-        lc.font = F_KPI_LABEL
-        lc.fill = FILL_CREAM
-        lc.alignment = Alignment(horizontal="center", vertical="center")
-        lc.border = BOX
-        vc = ws.cell(row=5, column=col, value=formula)
-        vc.font = F_KPI_VALUE
-        vc.fill = FILL_CREAM
-        vc.number_format = fmt
-        vc.alignment = Alignment(horizontal="center", vertical="center")
-        vc.border = BOX
-        ws.column_dimensions[get_column_letter(col)].width = 17
-    ws.row_dimensions[4].height = 18
-    ws.row_dimensions[5].height = 30
-    # 날짜는 13pt 굵게면 폭이 모자라 ####### 이 된다
-    ws.cell(row=5, column=1 + len(kpis)).font = Font(
-        name="맑은 고딕", size=11, bold=True, color=INK)
-
-    ws["B8"] = "■ 평가액 스냅샷"
-    ws["B8"].font = Font(name="맑은 고딕", size=12, bold=True, color=INK)
-    ws["B9"] = ("주 2회 stock-price 스킬로 append. 주식평가액은 [시세기록]의 같은 날짜 합계로 자동 계산된다. "
-                "보유현금과 입출금만 직접 넣으면 된다.")
-    ws["B9"].font = F_MUTED
+    write_kpi_block(ws)   # KPI 두 밴드 + 스냅샷 제목(9·10행)까지 여기서 쓴다
 
     _table_header(ws, SNAP_HEAD_ROW, SNAP_COLS)
     for r in range(SNAP_FIRST_ROW, MAXR + 1):
