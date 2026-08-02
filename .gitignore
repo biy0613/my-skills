@@ -7,3 +7,15 @@ Thumbs.db
 *-workspace/
 tools/autopush.log
 dist/
+
+# ── 개인 금융 데이터 안전망 ──────────────────────────────────────────────
+# 이 저장소는 public 이고 SessionEnd 훅이 `git add -A` 로 전부 커밋한다.
+# 사용자 데이터가 실수로 스킬 폴더에 떨어져도 GitHub 에 올라가지 않도록 막는다.
+# 원장(포트폴리오기록.xlsx·트레이딩기록.xlsx)은 저장소 밖(OneDrive)에 두는 것이 원칙이다.
+*.xlsx
+*.xls
+*.csv
+payload*.json
+snapshot*.json
+*_payload.json
+*_snapshot.json

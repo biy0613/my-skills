@@ -28,9 +28,9 @@ from openpyxl.worksheet.datavalidation import DataValidation
 # --------------------------------------------------------------------------
 # 경로
 # --------------------------------------------------------------------------
-DEFAULT_WB_PATH = os.environ.get(
-    "STOCK_PORTFOLIO_XLSX",
-    r"C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\트레이딩 기록\포트폴리오기록.xlsx",
+DEFAULT_WB_PATH = os.environ.get("STOCK_PORTFOLIO_XLSX") or os.path.join(
+    os.path.expanduser("~"),
+    "OneDrive", "바탕 화면", "클로드실습", "주식", "트레이딩 기록", "포트폴리오기록.xlsx",
 )
 
 # --------------------------------------------------------------------------

@@ -12,8 +12,13 @@ description: >
 
 # 종목 기록 (stock-record)
 
-원장: `C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\트레이딩 기록\포트폴리오기록.xlsx`
+원장: `%USERPROFILE%\OneDrive\바탕 화면\클로드실습\주식\트레이딩 기록\포트폴리오기록.xlsx`
+(경로를 바꾸려면 환경변수 `STOCK_PORTFOLIO_XLSX` 로 덮어쓴다)
 설계 근거: `주식/투자체크포인트_템플릿.md`
+
+> **이 문서는 공개 저장소에 있다.** 아래 예시의 종목·수량·단가는 전부 **가상 값**이다.
+> 실제 보유 내역·논지·잔고는 이 저장소에 절대 적지 않는다. 기록은 전부 저장소 밖 xlsx로 간다.
+> payload JSON은 **임시 폴더**에 쓴다. 스킬 폴더 안에 쓰면 자동 커밋으로 GitHub에 올라간다.
 
 ## 0. 이 스킬의 원칙 — 어길 것 같으면 먼저 지적한다
 
@@ -30,7 +35,7 @@ description: >
    ①~⑤ 후보와 각 요건을 매번 보여준 뒤 고르게 한다. 진입 하드게이트 6, 회수 A 보류게이트 7도
    같다. 사용자는 문항을 외우고 있지 않으므로, 보여주지 않으면 판정 자체가 불가능하다.
    문항 전문은 아래 5절에 있고, 스크립트로도 뽑을 수 있다:
-   `python scripts/record.py --gates`
+   `python "$env:USERPROFILE\.claude\skills\stock-record\scripts\record.py" --gates`
 
 ## 1. 무엇을 기록할지 확정
 
@@ -61,20 +66,20 @@ description: >
 payload를 만들어 `scripts/record.py` 에 넘긴다.
 
 ```bash
-python "C:\Users\biy06\.claude\skills\stock-record\scripts\record.py" --input payload.json
+python "$env:USERPROFILE\.claude\skills\stock-record\scripts\record.py" --input payload.json
 ```
 
 payload는 임시 폴더에 UTF-8로 쓴다. 형식:
 
 ```json
 {
-  "종목명": "HIMS",
+  "종목명": "ACME",
   "단계": "진입",
   "마스터": {
-    "티커": "HIMS", "시장": "NYSE", "통화": "USD",
-    "수량": 120, "평균단가": 42.5,
-    "진입일": "2026-08-02", "목표비중": 0.06,
-    "손절선": 30, "익절목표": 75
+    "티커": "ACME", "시장": "NASDAQ", "통화": "USD",
+    "수량": 10, "평균단가": 50.0,
+    "진입일": "2026-01-01", "목표비중": 0.05,
+    "손절선": 35, "익절목표": 80
   },
   "데이터": { "핵심 논지 (한 문장)": "...", "반대 논지 (2개 이상)": "..." }
 }

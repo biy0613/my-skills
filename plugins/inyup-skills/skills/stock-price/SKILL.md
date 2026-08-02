@@ -11,7 +11,11 @@ description: >
 
 # 평가액 갱신 (stock-price)
 
-원장: `C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\트레이딩 기록\포트폴리오기록.xlsx`
+원장: `%USERPROFILE%\OneDrive\바탕 화면\클로드실습\주식\트레이딩 기록\포트폴리오기록.xlsx`
+(경로를 바꾸려면 환경변수 `STOCK_PORTFOLIO_XLSX` 로 덮어쓴다)
+
+> **이 문서는 공개 저장소에 있다.** 아래 예시의 종목·수량·단가는 전부 **가상 값**이다.
+> 실제 보유 내역·잔고는 이 저장소에 절대 적지 않는다. 원장 xlsx는 저장소 밖에 있다.
 
 주 2회 실행한다. 하는 일은 두 가지뿐이다.
 **① 종목별 주당단가를 [시세기록]에 append → ② [대시보드]에 스냅샷 한 줄 추가.**
@@ -20,7 +24,7 @@ description: >
 ## 1. 무엇을 입력해야 하는지 먼저 보여준다
 
 ```bash
-python "C:\Users\biy06\.claude\skills\stock-price\scripts\update_prices.py" --list
+python "$env:USERPROFILE\.claude\skills\stock-price\scripts\update_prices.py" --list
 ```
 
 보유 종목 · 통화 · 수량 · 직전 기록일 · 직전 단가가 JSON으로 나온다.
@@ -30,8 +34,8 @@ python "C:\Users\biy06\.claude\skills\stock-price\scripts\update_prices.py" --li
 ```
 | 종목 | 통화 | 수량 | 직전(07-29) | 오늘 |
 |---|---|---|---|---|
-| SK하이닉스 | KRW | 30 | 251,000 | ? |
-| HIMS | USD | 120 | 48.20 | ? |
+| 가나전자 | KRW | 10 | 100,000 | ? |
+| ACME   | USD | 10 | 50.00   | ? |
 ```
 
 함께 받을 것:
@@ -52,7 +56,7 @@ python "C:\Users\biy06\.claude\skills\stock-price\scripts\update_prices.py" --li
 payload를 임시 폴더에 UTF-8 JSON으로 쓰고 실행한다.
 
 ```bash
-python "C:\Users\biy06\.claude\skills\stock-price\scripts\update_prices.py" --input snapshot.json
+python "$env:USERPROFILE\.claude\skills\stock-price\scripts\update_prices.py" --input snapshot.json
 ```
 
 ```json
@@ -62,7 +66,7 @@ python "C:\Users\biy06\.claude\skills\stock-price\scripts\update_prices.py" --in
   "보유현금": 5000000,
   "입출금": 0,
   "메모": "",
-  "시세": { "SK하이닉스": 258000, "HIMS": 51.0 }
+  "시세": { "가나전자": 102000, "ACME": 51.0 }
 }
 ```
 
