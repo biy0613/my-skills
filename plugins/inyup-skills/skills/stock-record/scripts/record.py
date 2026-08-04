@@ -143,30 +143,32 @@ def main() -> int:
     P.touch_master(wsm, name, **mfields)
 
     # --- 기록 --------------------------------------------------------------
+    written_row = None            # 표 단계에서 실제로 기록된 행
     if stage == "진입":
         done = P.write_entry(ws, data)
         where = "① 진입 기록"
     elif stage == "보유점검":
-        row = P.append_review(ws, data)
+        written_row = P.append_review(ws, data)
         done = [k for k in REVIEW_FIELDS if data.get(k) not in (None, "")]
-        where = f"② 보유 점검 {row}행"
+        where = f"② 보유 점검 {written_row}행"
     elif stage == "회수":
         done = P.write_exit(ws, data)
         where = "③ 회수"
     elif stage == "홀드":
-        row = P.append_hold(ws, data)
+        written_row = P.append_hold(ws, data)
         done = [k for k in HOLD_FIELDS if data.get(k) not in (None, "")]
-        where = f"③-E 홀드 기록 {row}행"
+        where = f"③-E 홀드 기록 {written_row}행"
     else:
-        row = P.append_follow(ws, data)
+        written_row = P.append_follow(ws, data)
         done = [k for k in FOLLOW_FIELDS if data.get(k) not in (None, "")]
-        where = f"④ 사후 추적 {row}행"
+        where = f"④ 사후 추적 {written_row}행"
 
     wb.save(args.workbook)
 
     # 빈 항목은 이번 payload가 아니라 **시트의 실제 상태**로 판정한다.
     # payload 기준으로 세면 부분 갱신 때 이미 채워진 칸까지 비었다고 보고하게 된다.
-    missing = [x["필드"] for x in P.block_status(ws, stage) if x["값"] in (None, "")]
+    missing = [x["필드"] for x in P.block_status(ws, stage, row=written_row)
+               if x["값"] in (None, "")]
     print(json.dumps({
         "결과": "기록 완료",
         "종목": name,

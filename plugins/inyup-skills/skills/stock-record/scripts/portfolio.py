@@ -1148,10 +1148,14 @@ _STAGE_TABLE = {"보유점검": ("#REVIEW", REVIEW_COLS),
                 "사후추적": ("#FOLLOW", FOLLOW_COLS)}
 
 
-def block_status(ws, stage: str) -> list[dict]:
+def block_status(ws, stage: str, row: int | None = None) -> list[dict]:
     """해당 단계에서 채워야 할 자리를 엑셀 좌표와 함께 돌려준다.
 
     반환: [{"cell": "C33", "row": 33, "필드": "수급", "값": None, "힌트": "..."}]
+
+    표 단계(보유점검·홀드·사후추적)는 기본적으로 **다음에 기록될 빈 행**을 본다.
+    방금 기록한 행의 충실도를 보려면 `row` 로 그 행을 직접 지정한다 —
+    지정하지 않으면 이미 쓴 행이 아니라 그 아래 빈 행을 검사해 전부 비었다고 보고한다.
     """
     out = []
     if stage in _STAGE_BLOCK:
@@ -1171,7 +1175,9 @@ def block_status(ws, stage: str) -> list[dict]:
     if hdr is None:
         raise RuntimeError(f"{marker} 앵커를 찾지 못했다")
     hdr += 1
-    if stage == "사후추적":
+    if row is not None:
+        rows = [row]
+    elif stage == "사후추적":
         rows = [hdr + 1 + i for i in range(len(FOLLOW_ROWS))]
     else:
         rows = [first_empty_row(ws, hdr)]
