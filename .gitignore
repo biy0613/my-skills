@@ -19,3 +19,12 @@ payload*.json
 snapshot*.json
 *_payload.json
 *_snapshot.json
+
+# ── VC 딜 데이터 안전망 ──────────────────────────────────────────────────
+# dealflow-insight 의 관찰 DB·시드 맵·소스 식별자는 회사 실명과 딜 수치를 담는다.
+# 정위치는 프로젝트 폴더(OneDrive)이고, 스킬 폴더에 떨어지면 public 저장소로 나간다.
+observations*.json
+observations-table*.md
+dealflow-insight-map*.md
+*.local.md
+deepdive_*.md
