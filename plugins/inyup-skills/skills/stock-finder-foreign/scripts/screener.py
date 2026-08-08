@@ -287,16 +287,29 @@ def compute_foreign(uni, trend, cfg, out):
 
 
 # ─────────────────── 4. 실적·컨센서스 수집 ───────────────────
+def fetch_fn(code):
+    """FnGuide 신버전 재무 JSON — 분기 손익 + 분기 현금흐름.
+
+    **cmp_cd 를 틀리면 조용히 삼성전자가 온다.** 구버전 SVD_Main의 함정이 그대로
+    옮겨왔다: 파라미터명을 gicode/code 로 쓰면 오류가 아니라 삼성전자 페이지가
+    반환된다. 반드시 cmp_cd 를 쓰고, 응답의 종목 일치는 상위에서 검증한다.
+    freq_typ=Q 가 분기, Y 는 '3년 + 최근분기'라 4개 분기 누적에 쓰면 안 된다.
+    """
+    out = {}
+    for key, ep in (("income", "getFinIncome"), ("cashflow", "getFinCashFlow")):
+        j = retry_json(f"{WCOMP}/{ep}",
+                       {"cmp_cd": code, "freq_typ": "Q", "consol_typ": "M"}, FNJ)
+        out[key] = (j or {}).get("dataset")
+    return out if out.get("income") else None
+
+
 def fetch_fund(code):
-    g = "A" + code
     d = {"code": code}
     d["integration"] = retry_json(f"https://m.stock.naver.com/api/stock/{code}/integration", None, NV)
-    d["fn_finance"] = retry_text("https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp",
-                                 {"pGB": "1", "gicode": g, "cID": "", "MenuYn": "Y",
-                                  "ReportGB": "", "NewMenuID": "103", "stkGb": "701"}, UA)
-    d["fn_corp"] = retry_text("https://comp.fnguide.com/SVO2/ASP/SVD_Corp.asp",
-                              {"pGB": "1", "gicode": g, "cID": "", "MenuYn": "Y",
-                               "ReportGB": "", "NewMenuID": "102", "stkGb": "701"}, UA)
+    d["fn_finance"] = fetch_fn(code)
+    # 매출구성(구 SVD_Corp)은 신버전에 대응 JSON 경로가 없다. 리포트 서술용이고
+    # 필수컷 판정에는 쓰이지 않으므로 확인불가로 남긴다 — 추정으로 채우지 않는다.
+    d["fn_corp"] = None
     H = {**UA, "X-Requested-With": "XMLHttpRequest",
          "Referer": f"https://navercomp.wisereport.co.kr/v1/company/c1050001.aspx?cmp_cd={code}"}
     base = {"cmp_cd": code, "finGubun": "MAIN", "frq": "0", "sec_cd": ""}
@@ -401,21 +414,60 @@ def is_quarterly(dates):
     return {v[i + 1] - v[i] for i in range(len(v) - 1)} == {3}
 
 
-def pick_quarter_tables(html):
-    """인덱스가 아니라 컬럼 간격으로 분기 손익/현금흐름 테이블을 찾는다."""
-    ts = pd.read_html(io.StringIO(html))
-    q_is = q_cf = None
-    for t in ts:
-        cols = [str(c) for c in t.columns]
-        dates = [c for c in cols if re.match(r"^\d{4}/\d{2}$", c)]
-        if not is_quarterly(dates):
+def _fn_frame(ds):
+    """FnGuide 재무 JSON dataset → 구버전 HTML 테이블과 같은 모양의 DataFrame.
+
+    이렇게 껍데기를 맞춰 두면 analyze()·verify_sources 의 판정 로직을 손대지 않아도 된다.
+    헤더 YYMM 은 '2026/03 (최근분기)' / '2025/03 (전년동기)' / '전년동기대비(%)' 처럼
+    라벨이 붙어 오므로 잘라서 컬럼명으로 쓴다.
+    """
+    if not ds or not ds.get("header") or not ds.get("data"):
+        return None
+    cols, seen = [], {}
+    for h in ds["header"]:
+        y = str(h.get("YYMM") or "").strip()
+        if "전년동기대비" in y:
+            name = "전년동기(%)"
+        elif "(전년동기)" in y:
+            name = "전년동기"
+        else:
+            m = re.match(r"(\d{4}/\d{2})", y)
+            if not m:
+                continue
+            name = m.group(1)
+        seen[h["CD"]] = name
+        cols.append(name)
+    rows = []
+    for r in ds["data"]:
+        label = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", str(r.get("NAME") or ""))).strip()
+        rec = {"항목": label}
+        for cd, name in seen.items():
+            rec[name] = r.get(cd)
+        rows.append(rec)
+    return pd.DataFrame(rows, columns=["항목"] + cols)
+
+
+def pick_quarter_tables(fn):
+    """분기 손익 / 분기 현금흐름 DataFrame. 간격이 3개월이 아니면 버린다.
+
+    구버전에서는 여러 HTML 테이블 중 어느 것이 분기표인지 골라내야 했다. 신버전은
+    freq_typ 로 지정하지만, **연간 응답도 마지막에 최근 분기를 덧붙여 오므로**
+    (['2023/12','2024/12','2025/12','2026/03']) 간격 검사는 그대로 유지한다.
+    이걸 빼면 '3년 + 1분기'가 4개 분기로 합산돼 영업이익이 3배 부풀려진다.
+    """
+    if isinstance(fn, str):        # 구버전 HTML 캐시 — 더 이상 지원하지 않는다
+        return None, None
+    if not isinstance(fn, dict):
+        return None, None
+    out = []
+    for key in ("income", "cashflow"):
+        t = _fn_frame(fn.get(key))
+        if t is None:
+            out.append(None)
             continue
-        first = str(t.iloc[0, 0]) if len(t) else ""
-        if q_is is None and "전년동기(%)" in cols and first.startswith("매출"):
-            q_is = t
-        if q_cf is None and first.replace(" ", "").startswith("영업활동"):
-            q_cf = t
-    return q_is, q_cf
+        dates = [c for c in t.columns if re.match(r"^\d{4}/\d{2}$", str(c))]
+        out.append(t if is_quarterly(dates) else None)
+    return out[0], out[1]
 
 
 def fy_weight(basedate, fy_label):

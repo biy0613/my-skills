@@ -119,59 +119,60 @@ def check_naver_integration(code):
 
 
 def check_fnguide_finance(code):
-    import pandas as pd
+    """FnGuide 신버전 재무 JSON (구 SVD_Finance.asp 는 2026-08 폐쇄)."""
     try:
-        r = requests.get("https://comp.fnguide.com/SVO2/ASP/SVD_Finance.asp",
-                         params={"pGB": "1", "gicode": "A" + code, "cID": "", "MenuYn": "Y",
-                                 "ReportGB": "", "NewMenuID": "103", "stkGb": "701"},
-                         headers=UA, timeout=35)
-        r.encoding = 'utf-8'
-        if 'giName' not in r.text:
-            rec("FnGuide SVD_Finance", False, "페이지 구조 변경 (giName 없음)")
-            return None
-        name = re.search(r'id="giName"[^>]*>([^<]+)<', r.text)
-        # 인덱스로 ts[1]을 집으면 screener가 실제로 쓰는 선택 로직을 검사하지 못한다.
-        # screener.pick_quarter_tables 를 그대로 불러 같은 판정을 거친다.
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from screener import pick_quarter_tables
-        q_is, q_cf = pick_quarter_tables(r.text)
+        from screener import fetch_fn, pick_quarter_tables
+        fn = fetch_fn(code)
+        if not fn:
+            rec("FnGuide SVD_Finance", False, "getFinIncome 응답 없음 (경로 변경 또는 차단)")
+            return None
+        q_is, q_cf = pick_quarter_tables(fn)
         if q_is is None or q_cf is None:
             rec("FnGuide SVD_Finance", False,
-                f"{name.group(1) if name else '?'} · 분기 테이블 선택 실패 "
+                f"분기 테이블 판정 실패 "
                 f"(손익 {'O' if q_is is not None else 'X'} / 현금흐름 {'O' if q_cf is not None else 'X'})")
             return None
         qcols = [c for c in q_is.columns if re.match(r"^\d{4}/\d{2}$", str(c))]
-        # 연간 테이블을 잘못 집으면 '3년+1분기'가 합산돼 3배 부풀려진다 → 간격 재확인
+        # 연간 응답을 잘못 쓰면 '3년+1분기'가 합산돼 3배 부풀려진다 → 간격 재확인
         v = [int(str(c)[:4]) * 12 + int(str(c)[5:7]) for c in qcols]
         gaps = {v[i + 1] - v[i] for i in range(len(v) - 1)}
-        ok = gaps == {3} and "전년동기(%)" in q_is.columns
+        # numpy.bool_ 은 `is True` 판정을 통과하지 못해 rec()가 FAIL로 찍는다 → bool() 필수
+        has_op = bool(q_is["항목"].astype(str).str.startswith("영업이익").any())
+        has_cf = bool(q_cf["항목"].astype(str).str.replace(" ", "").str.startswith("영업활동").any())
+        ok = bool(gaps == {3} and "전년동기" in q_is.columns and has_op and has_cf)
         rec("FnGuide SVD_Finance", ok,
-            f"{name.group(1) if name else '?'} · 분기 {qcols} · 간격 {gaps} · "
-            f"전년동기% {'전년동기(%)' in q_is.columns}")
-        return pd.read_html(io.StringIO(r.text))
+            f"분기 {qcols} · 간격 {gaps} · 전년동기 {'전년동기' in q_is.columns} · "
+            f"영업이익 {has_op} · 영업활동현금흐름 {has_cf}")
+        return fn
     except Exception as e:
         rec("FnGuide SVD_Finance", False, repr(e)[:90])
         return None
 
 
 def check_fnguide_main_trap(code):
-    """SVD_Main.asp는 gicode와 무관하게 삼성전자를 반환하는 알려진 버그가 있다."""
+    """구버전 SVD_Main의 '종목 무관 삼성전자 반환' 함정이 신버전에도 남아 있다.
+
+    신버전은 파라미터명이 cmp_cd 인데, gicode/code 처럼 틀린 이름을 주면 오류가 아니라
+    **삼성전자 데이터가 조용히 반환된다.** 전 종목 루프에서 이걸 만나면 모든 종목이
+    삼성전자 실적으로 채워지므로, 매번 이 함정이 살아 있는지 확인한다.
+    """
     try:
-        r = requests.get("https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp",
-                         params={"pGB": "1", "gicode": "A" + code, "cID": "", "MenuYn": "Y",
-                                 "ReportGB": "", "NewMenuID": "101", "stkGb": "701"},
-                         headers=UA, timeout=30)
+        r = requests.get("https://wcomp.fnguide.com/CompanyInfo/Finance",
+                         params={"gicode": "A" + code}, headers=UA, timeout=30)
         r.encoding = 'utf-8'
-        m = re.search(r'id="giName"[^>]*>([^<]+)<', r.text)
-        got = m.group(1).strip() if m else "?"
-        if code != "005930" and got == "삼성전자":
-            rec("[함정] FnGuide SVD_Main", None,
-                f"여전히 고장 (A{code} 요청에 '{got}' 반환) — 이 페이지 사용 금지")
-        else:
-            rec("[함정] FnGuide SVD_Main", True,
-                f"'{got}' 반환 — 버그 수정된 듯하나 계속 flag=2로 선행PER 계산 권장")
+        m = re.search(r"<title>([^(<]+)\((\d{6})\)", r.text)
+        got, gotcd = (m.group(1).strip(), m.group(2)) if m else ("?", "?")
+        r2 = requests.get("https://wcomp.fnguide.com/CompanyInfo/Finance",
+                          params={"cmp_cd": code}, headers=UA, timeout=30)
+        r2.encoding = 'utf-8'
+        m2 = re.search(r"<title>([^(<]+)\((\d{6})\)", r2.text)
+        ok = bool(m2) and m2.group(2) == code
+        rec("[함정] FnGuide 파라미터명", ok,
+            f"cmp_cd={code} → {m2.group(1).strip() if m2 else '?'}({m2.group(2) if m2 else '?'}) · "
+            f"틀린 이름(gicode) → {got}({gotcd}) — cmp_cd 외의 이름은 조용히 삼성전자를 준다")
     except Exception as e:
-        rec("[함정] FnGuide SVD_Main", None, repr(e)[:70])
+        rec("[함정] FnGuide 파라미터명", None, repr(e)[:70])
 
 
 def check_wise(code):
