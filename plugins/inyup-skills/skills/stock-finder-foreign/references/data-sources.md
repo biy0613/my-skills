@@ -184,6 +184,32 @@ Headers: X-Requested-With: XMLHttpRequest
 
 **매출구성(구 `SVD_Corp.asp`)은 대응 경로를 못 찾았다.** 신버전 `/CompanyInfo/getCrpSalesTrend`는 GET·POST 모두 JSON이 아닌 HTML을 돌려준다. `rev_mix`는 리포트 서술용이고 필수컷 판정에는 쓰이지 않으므로 **확인불가로 비워 둔다**(`fn_corp = None`). 밸류체인 포지션을 쓸 때는 DART 사업보고서나 네이버 종목 페이지를 직접 본다.
 
+### 2.45 ETF CHECK — ETF 구성종목 (섹터·패시브 수급용)
+
+"이 종목이 어느 ETF에 들어 있나"를 묻는 **역방향 조회 경로는 공개된 것이 없다.** 네이버 구 API(`etfItemComponentList.nhn`)와 신 경로(`m.stock.naver.com/.../etf/portfolio` 등)는 전부 404다. ETF CHECK에 역방향 API(`getAllEtfSearchByPdf`)가 있으나 필수 파라미터를 못 맞춰 항상 `Error while performing Query`를 반환한다. 그래서 **대상 ETF의 구성종목을 전부 받아 뒤집는다.**
+
+```
+GET https://www.etfcheck.co.kr/api/user/etp/getEtfPdfRankListWeightAll?code={ETF코드}
+Headers: Referer: https://www.etfcheck.co.kr/  ·  일반 브라우저 UA
+```
+
+인증 불필요. 응답 필드:
+
+| 필드 | 내용 |
+|---|---|
+| `F16013` | ETF 코드 |
+| `F12506` | **PDF 기준일** (예: `20260807`) — 출처·조회일 병기에 쓴다 |
+| `F16316` | 구성종목 ISIN (`KR7000660001` → `[3:9]` = `000660`) |
+| `NAME` / `F16004` | 구성종목명 |
+| `WEIGHT` | 비중 % (내림차순 정렬) |
+
+**함정 두 가지.**
+
+1. **상위 20종목까지만 준다.** `start`·`limit`·`showAll` 어떤 조합으로도 더 못 받는다. 다만 실측해보니 국내 섹터·테마 ETF는 보유 종목이 10~20개인 경우가 많아 대부분은 전량이 온다 — 36개 대상 중 20행이 꽉 찬 것은 10개뿐이고, **비중 커버리지 평균 98.7%(최저 90.9%)** 다. 잘리는 것은 비중 1% 미만 꼬리다. 그래도 "편입 0개"가 진짜 미편입인지 꼬리라 안 잡힌 것인지는 구분되지 않으므로 리포트에 명시한다.
+2. **요청 쿼터가 있다.** 1.2초 간격으로 36개를 연속 호출하면 30번째쯤에서 `403 {"error":"Forbidden"}`이 뜨고, 그 뒤로는 간격을 벌려도 한동안 계속 막힌다(쿨다운 30초로도 안 풀림). 그래서 `etf_holdings.py`는 간격 2초 + 403 3연속 시 중단 + **받아둔 것을 캐시에 병합**해 다음 실행이 나머지만 이어받는 증분 수집으로 짰다. 한 번에 다 받으려 들지 말 것.
+
+ISIN이 `KR7\d{9}` 형식이 아닌 행(원화현금·해외자산·선물)은 편입 종목이 아니므로 걸러낸다.
+
 ### 2.5 WISEreport — FY 컨센서스와 변동 추이 (가장 찾기 어려운 경로)
 
 네이버 증권 종목분석 탭의 백엔드다. `cF4002.aspx` 등 대부분의 ajax는 `기업재무정보 접속장애` 페이지를 반환하지만, **`c1050001_data.aspx`는 열려 있다.**
