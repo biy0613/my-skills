@@ -30,6 +30,13 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 NV = {**UA, "Referer": "https://m.stock.naver.com/"}
 WISE = "https://navercomp.wisereport.co.kr/company/ajax/c1050001_data.aspx"
 
+# FnGuide는 2026-08 구버전(comp.fnguide.com/SVO2/ASP/*.asp)을 통째로 폐쇄했다.
+# 구 URL은 404가 아니라 200 + "페이지가 없습니다" 안내 페이지를 돌려주므로,
+# status_code만 보면 정상으로 오인한다. 신버전은 HTML이 아니라 JSON API다.
+WCOMP = "https://wcomp.fnguide.com/CompanyInfo"
+FNJ = {**UA, "Referer": "https://wcomp.fnguide.com/CompanyInfo/Finance",
+       "X-Requested-With": "XMLHttpRequest"}
+
 # 2순위 가점 섹터 — 종목별 밸류체인 포지션은 사람이 쓴다(SKILL.md 참조)
 CORE_SECTOR_HINT = ["AI", "데이터센터", "반도체", "전력기기", "뷰티", "조선", "원자력", "방산", "로봇"]
 
