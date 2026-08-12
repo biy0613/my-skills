@@ -31,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import maxims as MX  # noqa: E402
 import portfolio as P  # noqa: E402
 
 REVIEW_FIELDS = ["점검일", "점검 요약", "가정1", "가정2", "가정3",
@@ -49,6 +50,17 @@ FIELDS = {
 MASTER_FIELDS = ["상태", "티커", "시장", "통화", "수량", "평균단가",
                  "목표비중", "손절선", "익절목표", "진입일", "최근점검일"]
 
+GATE_CODES = ([f"E{i}" for i in range(1, 7)] + [f"A{i}" for i in range(1, 8)]
+              + [f"B{i}" for i in range(1, 7)] + [f"T{i}" for i in range(1, 7)])
+
+
+def _load_maxims(path):
+    """[격언] 시트를 읽는다. 없거나 못 읽으면 조용히 빈 목록 — 기록은 계속돼야 한다."""
+    try:
+        return MX.load(P.open_wb(path))
+    except Exception:
+        return []
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -60,10 +72,47 @@ def main() -> int:
                     help="해당 종목·단계에서 채워야 할 엑셀 자리를 폼으로 출력")
     ap.add_argument("--questions", action="store_true",
                     help="사용자가 바로 답할 수 있는 질문 목록으로 출력 (게이트 판정 이후 단계)")
+    ap.add_argument("--maxims", action="store_true",
+                    help="[격언] 시트에서 해당 단계·게이트의 격언을 출력 (사용자에게 그대로 붙여넣을 것)")
+    ap.add_argument("--gate", help="--maxims 용 게이트 코드 (E1~E6 / A1~A7 / B1~B6 / T1~T6)")
+    ap.add_argument("--invoke", action="store_true",
+                    help="② 제지 기록에 한 줄 추가 (payload는 --input 또는 stdin)")
     ap.add_argument("--stock", help="--template 용 종목명")
     ap.add_argument("--stage", choices=list(FIELDS), help="--template 용 단계")
     ap.add_argument("--workbook", default=P.DEFAULT_WB_PATH)
     args = ap.parse_args()
+
+    if args.maxims:
+        items = _load_maxims(args.workbook)
+        if not items:
+            print("[격언] 시트가 없거나 비어 있다. 격언 없이 진행한다.")
+            return 0
+        if args.gate:
+            sel = MX.for_gate(items, args.gate)
+            print(MX.render(sel, None) if sel
+                  else f"{args.gate} 에 연결된 격언 없음")
+            return 0
+        print(MX.render(items, args.stage))
+        return 0
+
+    if args.invoke:
+        raw = open(args.input, encoding="utf-8").read() if args.input else sys.stdin.read()
+        pl = json.loads(raw)
+        wb = P.open_wb(args.workbook)
+        row = MX.append_invoke(
+            wb,
+            일시=pl.get("일시") or "",
+            격언ID=pl.get("격언ID") or pl.get("격언 ID") or "",
+            행동=pl.get("행동") or pl.get("내가 하려던 행동") or "",
+            짚은것=pl.get("짚은것") or pl.get("Claude가 짚은 것") or "",
+            결정=pl.get("결정") or pl.get("내 결정과 이유") or "",
+            결과=pl.get("결과") or pl.get("결과·복기") or "",
+        )
+        wb.save(args.workbook)
+        print(json.dumps({"결과": "제지 기록 완료", "시트": "격언",
+                          "위치": f"② 제지 기록 {row}행", "파일": args.workbook},
+                         ensure_ascii=False, indent=2))
+        return 0
 
     if args.template or args.questions:
         mode = "questions" if args.questions else "template"
@@ -82,12 +131,18 @@ def main() -> int:
         return 0
 
     if args.gates:
-        print(json.dumps({
+        items = _load_maxims(args.workbook)
+        out = {
             "진입 하드게이트 6": P.ENTRY_GATES,
             "회수 A 보류게이트 7": P.EXIT_GATES_A,
             "회수 B 강제트리거 6": P.EXIT_TRIGGERS_B,
-            "매도 유형 5": {k: v for k, v in P.EXIT_TYPES},
-        }, ensure_ascii=False, indent=2))
+            "매도 유형 6": {k: v for k, v in P.EXIT_TYPES},
+        }
+        if items:
+            # 문항 번호에 걸린 격언. 문항을 띄울 때 해당 격언도 함께 읽어준다.
+            out["격언_연결"] = {c: [f"{m['ID']} — {m['격언']}" for m in MX.for_gate(items, c)]
+                              for c in GATE_CODES if MX.for_gate(items, c)}
+        print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
 
     if args.fields:
@@ -191,7 +246,11 @@ def main() -> int:
     # payload 기준으로 세면 부분 갱신 때 이미 채워진 칸까지 비었다고 보고하게 된다.
     missing = [x["필드"] for x in P.block_status(ws, stage, row=written_row)
                if x["값"] in (None, "")]
-    print(json.dumps({
+    try:
+        maxim_note = [f"{m['ID']} — {m['격언']}" for m in MX.for_stage(MX.load(wb), stage)]
+    except Exception:
+        maxim_note = []
+    result = {
         "결과": "기록 완료",
         "종목": name,
         "단계": stage,
@@ -201,7 +260,10 @@ def main() -> int:
         "알림설정_동기화": {k: f"{v[0]} → {v[1]}" for k, v in synced.items()} or "변경 없음",
         "시트에_남은_빈_항목": missing,
         "파일": args.workbook,
-    }, ensure_ascii=False, indent=2))
+    }
+    if maxim_note:
+        result["이_단계의_격언"] = maxim_note
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
