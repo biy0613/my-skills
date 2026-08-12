@@ -157,6 +157,13 @@ def main() -> int:
                     pass
     P.touch_master(wsm, name, **mfields)
 
+    # 알림설정 동기화 — 여기서 안 하면 종목 시트와 알림 판정 기준이 갈라진다
+    synced = P.sync_alert_levels(wb, name, **{
+        k: master.get(k) for k in ("손절선", "익절1", "익절2", "추가매수")
+        if master.get(k) is not None})
+    if master.get("익절목표") is not None and "익절1" not in master:
+        synced.update(P.sync_alert_levels(wb, name, 익절1=master["익절목표"]))
+
     # --- 기록 --------------------------------------------------------------
     written_row = None            # 표 단계에서 실제로 기록된 행
     if stage == "진입":
@@ -191,6 +198,7 @@ def main() -> int:
         "시트": ws.title,
         "위치": where,
         "이번에_쓴_항목수": len(done),
+        "알림설정_동기화": {k: f"{v[0]} → {v[1]}" for k, v in synced.items()} or "변경 없음",
         "시트에_남은_빈_항목": missing,
         "파일": args.workbook,
     }, ensure_ascii=False, indent=2))

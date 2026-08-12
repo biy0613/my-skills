@@ -1245,6 +1245,33 @@ def render_questions(ws, stage: str, stock: str) -> str:
     return "\n".join(lines)
 
 
+def sync_alert_levels(wb, name: str, **levels) -> dict:
+    """[알림설정] 시트의 가격 임계치를 갱신한다.
+
+    종목 시트(서술)와 알림설정(자동 판정)이 따로 놀면 알림이 옛 값으로 돈다.
+    실제로 2026-08-10 갱신값이 알림설정에 반영되지 않아 이틀간 틀린 손절선으로
+    판정했다. 기록할 때 같이 쓰도록 여기로 묶는다.
+    """
+    if "알림설정" not in wb.sheetnames:
+        return {}
+    ws = wb["알림설정"]
+    col = {"손절선": 7, "익절1": 8, "익절2": 9, "추가매수": 10}
+    changed = {}
+    for r in range(5, 40):
+        n, watch = ws.cell(r, 2).value, ws.cell(r, 3).value
+        if n != name or str(watch).upper() not in ("O", "X"):
+            continue
+        for k, v in levels.items():
+            if v in (None, "") or k not in col:
+                continue
+            old = ws.cell(r, col[k]).value
+            if old != v:
+                ws.cell(r, col[k], value=v)
+                changed[k] = (old, v)
+        return changed
+    return {}
+
+
 def touch_master(ws_master, name: str, **fields) -> None:
     """마스터의 해당 종목 행 갱신 (진입일·최근점검일·상태·손절선 등)."""
     col_of = {
