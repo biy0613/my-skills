@@ -18,7 +18,9 @@ from datetime import date
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-DEFAULT_DATA_DIR = r"C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\종목분석툴"
+DEFAULT_DATA_DIR = r"C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\종목분석툴\_프레임워크"
+# 2026-08-22 폴더 정리 이전 위치. 옛 배치에서도 동작하도록 남긴다.
+LEGACY_DATA_DIR = r"C:\Users\biy06\OneDrive\바탕 화면\클로드실습\주식\종목분석툴"
 
 # (시장유효성, 조회시장) → 적용가능
 APPLICABILITY = {
@@ -44,7 +46,7 @@ def norm(s):
 
 
 def find_data_dir(explicit):
-    for cand in (explicit, os.getcwd(), DEFAULT_DATA_DIR):
+    for cand in (explicit, os.getcwd(), DEFAULT_DATA_DIR, LEGACY_DATA_DIR):
         if cand and os.path.isfile(os.path.join(cand, "observations.json")):
             return cand
     return None
