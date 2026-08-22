@@ -196,21 +196,19 @@ def main() -> int:
     elif stage == "회수":
         # 부분 매도가 훨씬 흔하다. 수량이 남았는데 '청산'으로 찍으면 그 종목이
         # 평가액·비중 집계에서 통째로 빠져 총자산이 틀어진다.
-        # 남은 수량이 0 이하로 확인될 때만 청산으로 바꾼다.
-        if "상태" not in mfields:
-            cur_qty = None
-            for r in range(P.MASTER_FIRST_ROW, P.MASTER_FIRST_ROW + 40):
-                if wsm.cell(row=r, column=3).value == name:
-                    cur_qty = wsm.cell(row=r, column=7).value
-                    break
-            sold = data.get("매도 수량")
-            if cur_qty is not None and sold is not None:
-                try:
-                    if float(cur_qty) - float(sold) <= 0:
-                        mfields["상태"] = "청산"
-                except (TypeError, ValueError):
-                    pass
+        # 상태는 touch_master 이후 **최종 수량**을 보고 정한다 —
+        # 마스터를 먼저 갱신했는지 나중에 갱신했는지에 흔들리지 않게 하기 위함이다.
+        pass
     P.touch_master(wsm, name, **mfields)
+
+    if stage == "회수" and "상태" not in mfields:
+        # 최종 수량이 0(또는 비어 있음)일 때만 청산. 남아 있으면 부분 매도다.
+        for r in range(P.MASTER_FIRST_ROW, P.MASTER_FIRST_ROW + 40):
+            if wsm.cell(row=r, column=3).value == name:
+                q = wsm.cell(row=r, column=7).value
+                wsm.cell(row=r, column=2,
+                         value="청산" if q in (None, 0) else "보유")
+                break
 
     # 알림설정 동기화 — 여기서 안 하면 종목 시트와 알림 판정 기준이 갈라진다
     synced = P.sync_alert_levels(wb, name, **{
