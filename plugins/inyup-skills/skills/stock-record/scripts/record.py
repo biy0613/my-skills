@@ -75,6 +75,8 @@ def main() -> int:
     ap.add_argument("--maxims", action="store_true",
                     help="[격언] 시트에서 해당 단계·게이트의 격언을 출력 (사용자에게 그대로 붙여넣을 것)")
     ap.add_argument("--gate", help="--maxims 용 게이트 코드 (E1~E6 / A1~A7 / B1~B6 / T1~T6)")
+    ap.add_argument("--brief", action="store_true",
+                    help="--maxims 를 ID + 한 줄로만 출력 (격언이 많을 때)")
     ap.add_argument("--invoke", action="store_true",
                     help="② 제지 기록에 한 줄 추가 (payload는 --input 또는 stdin)")
     ap.add_argument("--stock", help="--template 용 종목명")
@@ -89,10 +91,10 @@ def main() -> int:
             return 0
         if args.gate:
             sel = MX.for_gate(items, args.gate)
-            print(MX.render(sel, None) if sel
+            print(MX.render(sel, None, full=not args.brief) if sel
                   else f"{args.gate} 에 연결된 격언 없음")
             return 0
-        print(MX.render(items, args.stage))
+        print(MX.render(items, args.stage, full=not args.brief))
         return 0
 
     if args.invoke:
