@@ -14,7 +14,7 @@
   #INVOKE  ② 제지 기록   B 일시 / C 격언 ID / D 하려던 행동 / E 짚은 것 / F 결정 / G 결과
   #SOURCE  ③ 원문 보관
 
-게이트 코드: E1~E6 진입 하드게이트 / A1~A7 회수 A / B1~B6 회수 B / T1~T6 매도 유형
+게이트 코드: E1~E5 진입 하드게이트 / A1~A7 회수 A / B1~B5 회수 B / T1~T6 매도 유형
 """
 from __future__ import annotations
 

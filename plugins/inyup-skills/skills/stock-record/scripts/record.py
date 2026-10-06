@@ -74,7 +74,7 @@ def main() -> int:
                     help="사용자가 바로 답할 수 있는 질문 목록으로 출력 (게이트 판정 이후 단계)")
     ap.add_argument("--maxims", action="store_true",
                     help="[격언] 시트에서 해당 단계·게이트의 격언을 출력 (사용자에게 그대로 붙여넣을 것)")
-    ap.add_argument("--gate", help="--maxims 용 게이트 코드 (E1~E6 / A1~A7 / B1~B6 / T1~T6)")
+    ap.add_argument("--gate", help="--maxims 용 게이트 코드 (E1~E5 / A1~A7 / B1~B5 / T1~T6)")
     ap.add_argument("--brief", action="store_true",
                     help="--maxims 를 ID + 한 줄로만 출력 (격언이 많을 때)")
     ap.add_argument("--invoke", action="store_true",
@@ -135,9 +135,9 @@ def main() -> int:
     if args.gates:
         items = _load_maxims(args.workbook)
         out = {
-            "진입 하드게이트 6": P.ENTRY_GATES,
+            "진입 하드게이트 5": P.ENTRY_GATES,
             "회수 A 보류게이트 7": P.EXIT_GATES_A,
-            "회수 B 강제트리거 6": P.EXIT_TRIGGERS_B,
+            "회수 B 강제트리거 5": P.EXIT_TRIGGERS_B,
             "매도 유형 6": {k: v for k, v in P.EXIT_TYPES},
         }
         if items:
